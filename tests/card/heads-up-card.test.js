@@ -47,9 +47,14 @@ describe("normalizeConfig", () => {
       max_items: null,
       sort: "severity",
       layout: "comfortable",
+      progress_style: "bar",
       show_all: false,
       show_empty: false,
     });
+  });
+
+  it("accepts a full-height progress fill", () => {
+    expect(normalizeConfig({ progress_style: "background" }).progress_style).toBe("background");
   });
 
   it("returns every key listed in CONFIG_KEYS", () => {
@@ -67,6 +72,7 @@ describe("normalizeConfig", () => {
     [{ severity: ["urgent"] }],
     [{ sort: "name" }],
     [{ layout: "wide" }],
+    [{ progress_style: "wide" }],
     [{ max_items: 0 }],
     [{ max_items: 1.5 }],
     [{ tag: [1] }],

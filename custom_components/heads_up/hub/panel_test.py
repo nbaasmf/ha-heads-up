@@ -75,6 +75,7 @@ async def banner_from(hub: HubEngine, data: dict[str, Any]) -> Banner:
         created_at=now,
         updated_at=now,
         title=data.get("title"),
+        progress=data.get("progress"),
         tag=data.get("tag"),
         channels=list(data["channels"]),
         targets={k: dict(v) for k, v in data.get("to", {}).items()},

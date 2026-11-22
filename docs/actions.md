@@ -39,10 +39,35 @@ The banner is on the dashboard for the people who are home, and each of them get
 | `title` | text | none | A heading above the message, up to 100 characters. |
 | `severity` | `success`, `info`, `warning`, `critical` | required | How important the message is. It sets the color, the default icon and the sort order of the banner; the push level (`success` and `info` are passive, `warning` normal, `critical` time-sensitive, shown at once on an idle phone); the popup style; and whether quiet hours let the message pass (`critical` does unless you change it). |
 | `icon` | icon, for example `mdi:water-alert` | the icon of the severity | Replaces the default icon on the banner and in the popup. A push, speech, mail and the notification bell do not show it. |
+| `progress` | whole percentage, 0 to 100 | none | Shows progress on the banner. With the push channel and full lock-screen content, it starts or updates a mobile Live Activity. |
 | `image` | text | none | A picture shown under the message on the card, in the popup and on the push: an `http://` or `https://` URL, or a path on this Home Assistant starting with `/` (`/local/door.jpg`, `/media/local/door.jpg`). Up to 2048 characters. Heads Up does not fetch or check it; a wrong path shows no picture. A picture from another host is loaded by the card, the popup and the phone, so that host learns the viewer's address and when the picture is shown. A path on this Home Assistant avoids that. Paths under `/api/` and `/media/` are signed for the card and the popup. The phone loads the picture itself, so it must reach the URL; camera proxy paths (`/api/camera_proxy/...`) work on Android only. The compact card layout shows no picture. With a lock screen setting other than `full`, the push has no picture (`image_hidden` in the trace). |
 | `tts_message` | text | the title if set, otherwise the message | The text for the speak channel, when it should differ from the written message. |
 | `volume` | number from 0 to 1 | none | Sets this volume on a media player before it speaks. Without it the volume stays as it is. Assist satellites and players that cannot set their volume ignore it. The volume is not restored afterwards. |
 | `tap_action` | object with `action` | none | A Home Assistant action that runs when someone taps the banner (the card) or the push. Passed on unchanged. Anyone who sees the banner can trigger it; see [SECURITY.md](../SECURITY.md). |
+
+### Following progress on the dashboard and phone
+
+```yaml
+action: heads_up.notify
+data:
+  id: dishwasher_cycle
+  title: Dishwasher
+  message: Rinsing
+  severity: info
+  progress: 45
+  channels: [banner, push]
+  recipients: [person.anna]
+```
+
+Use a fixed `id` and repeat the call with the next percentage. A value of 0 shows an empty bar. At 100 the full bar stays visible until the usual timeout, dismissal or clear. To end it explicitly:
+
+```yaml
+action: heads_up.clear_notifications
+data:
+  id: dishwasher_cycle
+```
+
+The Companion app uses a Live Activity on supported iPhones and a Live Update on supported Android devices. The push lock-screen setting must be `full` to share progress. With `title_only` or `generic`, the phone receives the configured redacted notification. Send updates at meaningful milestones to stay within push limits. [Companion app requirements and device settings](https://companion.home-assistant.io/docs/notifications/live-activities/)
 
 ### Where it goes and who gets it
 
@@ -319,6 +344,7 @@ The shortcut for a message that only shows a banner. It equals `heads_up.notify`
 | `title` | text | none | As in `notify`. |
 | `severity` | `success`, `info`, `warning`, `critical` | `warning` | As in `notify`, but the default is `warning`. |
 | `icon` | icon | the icon of the severity | As in `notify`. |
+| `progress` | whole percentage, 0 to 100 | none | As in `notify`. |
 | `image` | text | none | As in `notify`. |
 | `tap_action` | object with `action` | none | As in `notify`. |
 | `timeout` | seconds or duration | setting Default timeout | As in `notify`. |
@@ -397,6 +423,7 @@ Shortcut for `notify` with `channels: [push]` and no policies. It needs `audienc
 | `actions` | list of up to 3 buttons | none | As in `notify`. |
 | `tag` | text | none | As in `notify`. |
 | `tap_action` | object with `action` | none | As in `notify`. |
+| `progress` | whole percentage, 0 to 100 | none | As in `notify`. |
 | `image` | text | none | As in `notify`. |
 | `tts_message` | text | the title if set, otherwise the message | The text for the speak channel. |
 | `recipients` | list | one of `audience` or `recipients` | Persons, phones, speakers or groups, depending on the channel. |
@@ -703,6 +730,7 @@ The card shows a banner while it is active, not dismissed by you, and not remove
 | `max_items` | integer, 1 or more | no limit | Show at most this many banners, after sorting. Banners beyond the limit are never shown. |
 | `collapsed_items` | integer, 1 or more | off | Show this many banners and a "Show N more" button for the rest. The button then reads "Show less". |
 | `sort` | `severity` or `time` | `severity` | `severity`: critical first, then warning, info, success; newest first within a severity. `time`: newest first. |
+| `progress_style` | `bar` or `background` | `bar` | Draws a 3 px bar along the bottom of each banner or fills its background up to the current percentage. Uses the severity color. |
 | `layout` | `comfortable` or `compact` | `comfortable` | `compact` puts each banner on one line. |
 | `title` | text | none | A header above the banners. |
 | `show_time` | boolean | `false` | Show how long ago the banner was created or replaced ("just now", "50 min ago", "3 h ago", "1 day ago", "2 days ago"). |

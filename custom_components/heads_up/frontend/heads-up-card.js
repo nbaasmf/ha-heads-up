@@ -17,6 +17,7 @@ export const CONFIG_KEYS = [
   "max_items",
   "sort",
   "layout",
+  "progress_style",
   "show_all",
   "show_empty",
   "title",
@@ -36,12 +37,14 @@ export const CONFIG_KEYS = [
 const EDITOR_DEFAULTS = {
   sort: "severity",
   layout: "comfortable",
+  progress_style: "bar",
   colorize: "all",
   empty_icon: "mdi:bell-check-outline",
   show_acknowledged: true,
 };
 const SORTS = ["severity", "time"];
 const LAYOUTS = ["comfortable", "compact"];
+const PROGRESS_STYLES = ["bar", "background"];
 const COLORIZE = ["all", "background", "icon", "bar"];
 const DEFAULT_EMPTY_ICON = "mdi:bell-check-outline";
 const TIME_REFRESH_MS = 30000;
@@ -85,6 +88,9 @@ export const STRINGS = {
     max_items: "Maximum number of banners",
     sort: "Sort",
     layout: "Layout",
+    progress_style: "Progress display",
+    progress_bar: "Bottom bar",
+    progress_background: "Background fill",
     show_all: "Show banners for all users (admins only)",
     show_empty: "Show the card when there are no banners",
     title: "Card title",
@@ -153,6 +159,9 @@ export const TRANSLATIONS = {
       "max_items": "Maximale Anzahl Banner",
       "sort": "Sortierung",
       "layout": "Layout",
+      "progress_style": "Fortschrittsanzeige",
+      "progress_bar": "Balken am unteren Rand",
+      "progress_background": "Hintergrundfüllung",
       "show_all": "Banner aller Benutzer zeigen (nur Admins)",
       "show_empty": "Karte zeigen, wenn es keine Banner gibt",
       "title": "Kartentitel",
@@ -218,6 +227,9 @@ export const TRANSLATIONS = {
       "max_items": "Nombre maximal de bannières",
       "sort": "Tri",
       "layout": "Disposition",
+      "progress_style": "Affichage de la progression",
+      "progress_bar": "Barre en bas",
+      "progress_background": "Remplissage du fond",
       "show_all": "Afficher les bannières de tous les utilisateurs (administrateurs uniquement)",
       "show_empty": "Afficher la carte quand il n'y a aucune bannière",
       "title": "Titre de la carte",
@@ -283,6 +295,9 @@ export const TRANSLATIONS = {
       "max_items": "Número máximo de avisos",
       "sort": "Orden",
       "layout": "Diseño",
+      "progress_style": "Indicador de progreso",
+      "progress_bar": "Barra inferior",
+      "progress_background": "Relleno de fondo",
       "show_all": "Mostrar avisos de todos los usuarios (solo administradores)",
       "show_empty": "Mostrar la tarjeta cuando no hay avisos",
       "title": "Título de la tarjeta",
@@ -379,6 +394,10 @@ export function normalizeConfig(config) {
   if (!SORTS.includes(sort)) throw new Error(`sort must be one of ${SORTS.join(", ")}`);
   const layout = config.layout ?? "comfortable";
   if (!LAYOUTS.includes(layout)) throw new Error(`layout must be one of ${LAYOUTS.join(", ")}`);
+  const progressStyle = config.progress_style ?? "bar";
+  if (!PROGRESS_STYLES.includes(progressStyle)) {
+    throw new Error("progress_style must be bar or background");
+  }
   const colorize = config.colorize ?? "all";
   if (!COLORIZE.includes(colorize)) {
     throw new Error(`colorize must be one of ${COLORIZE.join(", ")}`);
@@ -402,6 +421,7 @@ export function normalizeConfig(config) {
     max_items: maxItems,
     sort,
     layout,
+    progress_style: progressStyle,
     show_all: toBool(config.show_all),
     show_empty: toBool(config.show_empty),
     title: toText(config.title, "title"),
@@ -615,11 +635,21 @@ const STYLE = `
   .list { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
   .region { display: flex; flex-direction: column; gap: 8px; }
   .banner {
-    position: relative; display: flex; align-items: flex-start; gap: 12px;
+    position: relative; isolation: isolate; display: flex; align-items: flex-start; gap: 12px;
     padding: 12px 8px 12px 12px; border-radius: 8px;
     border-inline-start: 4px solid transparent;
     background: var(--secondary-background-color);
     color: var(--primary-text-color);
+  }
+  .progress {
+    position: absolute; z-index: -1; pointer-events: none; inset: auto 0 0; height: 3px;
+    background: linear-gradient(to right, var(--accent) var(--percent), transparent var(--percent)),
+      color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .progress.background {
+    inset: 0; height: auto; border-radius: inherit;
+    background: linear-gradient(to right, color-mix(in srgb, var(--accent) 25%, transparent)
+      var(--percent), transparent var(--percent));
   }
   .banner.c-bg { background: color-mix(in srgb, var(--accent) 15%, var(--card-background-color)); }
   .banner.c-bar { border-inline-start-color: var(--accent); }
@@ -1008,6 +1038,14 @@ class HeadsUpCard extends Base {
       ? colors[banner.severity]
       : `var(${SEVERITY_COLOR[banner.severity] ?? "--info-color"})`;
     node.style.setProperty("--accent", color);
+    if (Number.isInteger(banner.progress) && banner.progress >= 0 && banner.progress <= 100) {
+      const meter = el("div", `progress ${cfg.progress_style}`);
+      meter.style.setProperty("--percent", `${banner.progress}%`);
+      meter.setAttribute("role", "progressbar");
+      meter.setAttribute("aria-label", banner.title || banner.message);
+      meter.setAttribute("aria-valuenow", String(banner.progress));
+      node.append(meter);
+    }
     if (cfg.layout === "compact") {
       node.title = banner.title ? `${banner.title}: ${banner.message}` : banner.message;
     }
@@ -1318,6 +1356,7 @@ class HeadsUpCardEditor extends Base {
       ]),
       { name: "show_time", selector: { boolean: {} } },
       { name: "show_severity", selector: { boolean: {} } },
+      select("progress_style", PROGRESS_STYLES.map((v) => ({ value: v, label: t[`progress_${v}`] }))),
       select("colorize", COLORIZE.map((v) => ({ value: v, label: t[`colorize_${v}`] }))),
       {
         name: "colors",
@@ -1403,7 +1442,7 @@ function registerElements() {
       type: "heads-up-card",
       name: "Heads Up",
       description: "Banners created by the Heads Up integration.",
-      documentationURL: "https://github.com/Seyphaton/ha-heads-up",
+      documentationURL: "https://github.com/nbaasmf/ha-heads-up",
     });
   }
 }

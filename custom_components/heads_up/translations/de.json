@@ -432,6 +432,10 @@
         "image": {
           "name": "Bild",
           "description": "Bild unter der Nachricht auf der Karte, im Popup und im Push. Eine URL mit http:// oder https:// oder ein Pfad, der mit / beginnt. Android und iOS lesen es; Kamera-Proxy-Pfade funktionieren nur auf Android.\n\nBeispiel:\n```yaml\nimage: /media/local/door.jpg\n```"
+        },
+        "progress": {
+          "name": "Fortschritt",
+          "description": "Ganze Prozentzahl von 0 bis 100. Dieselbe Nachrichten-ID aktualisiert den Wert."
         }
       }
     },
@@ -586,6 +590,10 @@
         "mail_body": {
           "name": "Mail-Text",
           "description": "Text der Mail dieser Nachricht, statt der Vorlage auf der Seite Kanäle. Dieselben Platzhalter wie beim Mail-Betreff. Nur mit dem Kanal Mail. Lass das Häkchen aus, um die Vorlage der Seite Kanäle zu nutzen."
+        },
+        "progress": {
+          "name": "Fortschritt",
+          "description": "Ganze Prozentzahl von 0 bis 100. Dieselbe Nachrichten-ID aktualisiert den Wert."
         }
       }
     },
@@ -644,6 +652,10 @@
         "audience": {
           "name": "Zielgruppe",
           "description": "Wähle eine Gruppe: Everyone, Admins, At home oder eine, die du auf der Seite Zielgruppen angelegt hast. Sie wird beim Senden bestimmt, At home heißt also, wer dann zu Hause ist. Gib entweder Zielgruppe oder Empfänger an."
+        },
+        "progress": {
+          "name": "Fortschritt",
+          "description": "Ganze Prozentzahl von 0 bis 100. Dieselbe Nachrichten-ID aktualisiert den Wert."
         }
       }
     },

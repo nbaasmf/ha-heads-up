@@ -1,9 +1,11 @@
 # Heads Up
 
-[![Open your Home Assistant instance and open this repository in the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Seyphaton&repository=ha-heads-up&category=integration)
+[![Open your Home Assistant instance and open this repository in the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nbaasmf&repository=ha-heads-up&category=integration)
 [![Open your Home Assistant instance and start setting up the Heads Up integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=heads_up)
 
 Heads Up is a central notification hub for Home Assistant. It gives your automations one way in to every channel: the dashboard, phones, popups, speakers, mail and persistent notifications. Audiences can follow who is home, who left a zone or who arrived first, and policies add reminders, escalation, quiet hours and an evening summary.
+
+In this fork, `heads_up.notify` accepts a percentage for dashboard progress bars and Companion app Live Activities. Use one message ID to keep the dashboard and phone in sync. [Progress example and settings](docs/actions.md#following-progress-on-the-dashboard-and-phone)
 
 The channel it adds to Home Assistant is the banner. A banner sits in a dashboard card until someone dismisses it, its condition stops matching or its timeout passes. When a message ends, Heads Up takes it back from every channel that can be cleared: the banner, the pushes, the popup and the persistent notification.
 
@@ -41,7 +43,7 @@ When something did not arrive, the Message Log tells you why. It lists each chan
 
 ## Get started in the UI
 
-1. In HACS, search for "Heads Up", click Download and restart Home Assistant. It needs Home Assistant 2026.9.0 or newer. Make a backup first.
+1. In HACS, add `https://github.com/nbaasmf/ha-heads-up` under Custom repositories as an Integration. Download Heads Up from this fork and restart Home Assistant. It needs Home Assistant 2026.9.0 or newer. Make a backup first.
 2. Go to Settings > Devices & services > Add integration > Heads Up. Leave "Show Heads Up in the sidebar" on: it adds the panel, visible to administrators.
 3. Open Heads Up in the sidebar. A four-step introduction shows what it found in your Home Assistant and offers four default policies: critical messages pushed at once to the administrators, warnings repeated every 30 minutes up to three times, an evening summary and quiet hours at night. Not now creates nothing.
 

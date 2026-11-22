@@ -9,6 +9,7 @@ button id carries message, recipient and action; nothing else in the event is tr
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -150,6 +151,21 @@ class PushChannel:
             else:
                 note = ";".join(n for n in (note, "image_hidden") if n)
         title, body = self._lockscreen(message)
+        if message.progress is not None and self._opt(OPT_PUSH_LOCKSCREEN) == "full":
+            # https://companion.home-assistant.io/docs/notifications/live-activities/
+            # Android requires a title. Keep activities apart from the ordinary push group.
+            title = title or "Heads Up"
+            data.pop("group")
+            # Companion activity tags accept at most 64 ASCII letters, digits, "-" or "_".
+            # Hash the installation-scoped tag so even the longest message ID fits.
+            activity_id = hashlib.sha256(data["tag"].encode()).hexdigest()[:32]
+            data.update(
+                tag=f"hu_live_{activity_id}",
+                live_update=True,
+                progress=message.progress,
+                progress_max=100,
+                alert_once=True,
+            )
         out: dict[str, Any] = {"message": body, "data": data}
         if title:
             out["title"] = title
@@ -211,6 +227,12 @@ class PushChannel:
     # Delivery ---------------------------------------------------------------------------
 
     async def deliver(self, message: Banner, target: Target) -> Outcome:
+        return await self._deliver(message, target, update=False)
+
+    async def update(self, message: Banner, target: Target) -> Outcome:
+        return await self._deliver(message, target, update=True)
+
+    async def _deliver(self, message: Banner, target: Target, *, update: bool) -> Outcome:
         registration = self._registration(target)
         if registration is None:
             return Outcome(Result.FAILED, "device_missing")
@@ -218,19 +240,26 @@ class PushChannel:
         platform = "ios" if platform == "ios" else "android"
         service = notify_service(str(registration.get("device_name", "")))
         payload, note = self.payload(message, target, platform)
+        # A normal notification and an activity can coexist on iOS. On a mode change,
+        # retire the previous presentation using the tag recorded for this device.
+        previous = self._hub.ledger.rows.get((message.id, self.name, target.key))
+        previous_tag = previous.ref if previous else None
+        new_tag = payload["data"]["tag"]
+        # iOS critical ordinary notifications also need a clear before replacement (N-62).
+        critical_replace = (
+            update
+            and platform == "ios"
+            and not payload["data"].get("live_update")
+            and self.level_for(message, target) == "critical"
+        )
+        if (previous_tag and previous_tag != new_tag) or critical_replace:
+            cleared = await self.clear(message.id, target, previous_tag or new_tag)
+            if cleared.result is not Result.SENT:
+                return cleared
         outcome = await self._call(target, service, payload)
         if outcome.result is Result.SENT:
             return Outcome(Result.SENT, note or None, ref=payload["data"]["tag"])
         return outcome
-
-    async def update(self, message: Banner, target: Target) -> Outcome:
-        # iOS critical notifications cannot be replaced: clear first, then send (N-62).
-        registration = self._registration(target)
-        ios = registration is not None and str(registration.get("os_name", "")).lower() == "ios"
-        if ios and self.level_for(message, target) == "critical":
-            token = self._token()
-            await self.clear(message.id, target, tag_for(token, message.id))
-        return await self.deliver(message, target)
 
     async def clear(self, message_id: str, target: Target, ref: str | None) -> Outcome:
         registration = self._registration(target)

@@ -13,7 +13,7 @@ Make a backup before you install.
 
 ## Install
 
-1. In HACS, search for "Heads Up" and click "Download".
+1. In HACS, open Custom repositories, add `https://github.com/nbaasmf/ha-heads-up` as an Integration, then download Heads Up from this fork.
 2. Restart Home Assistant. A restart pauses all automations until it has finished.
 3. Go to Settings > Devices & services > Add integration and choose Heads Up. The first screen asks "Show Heads Up in the sidebar". Leave it on to get the panel.
 

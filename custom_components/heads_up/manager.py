@@ -253,6 +253,7 @@ class BannerManager:
             tag=data.get("tag"),
             tap_action=data.get("tap_action"),
             image=data.get("image"),
+            progress=data.get("progress"),
             actions=[dict(a) for a in data.get("actions", [])],
             condition=condition,
             mode=data.get("mode", "once"),

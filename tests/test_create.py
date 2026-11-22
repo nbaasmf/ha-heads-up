@@ -30,6 +30,14 @@ async def test_minimal_call_creates_banner_with_defaults(
     assert banner.expires_at == banner.updated_at + timedelta(hours=24)
 
 
+@pytest.mark.parametrize("bad", [-1, 101, True, 12.5, "unknown"])
+async def test_invalid_progress_is_rejected(
+    entry: MockConfigEntry, create: CreateBanner, bad: object
+) -> None:
+    with pytest.raises(vol.Invalid):
+        await create(message="Progress", progress=bad)
+
+
 async def test_call_without_return_response_works(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
