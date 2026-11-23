@@ -792,16 +792,19 @@ const STYLE = `
   }
   .preview-button { position: relative; overflow: clip; }
   .preview-slide { width: 100%; min-width: 0; display: flex; align-items: center; gap: inherit; }
-  .preview-slide.entering { animation: heads-up-preview-in 260ms ease both; }
+  .preview-slide.entering {
+    animation: heads-up-preview-in var(--heads-up-preview-animation-duration, 420ms) ease-in-out both;
+  }
   .preview-slide.leaving {
     position: absolute; inset: 0; padding: inherit; box-sizing: border-box;
-    pointer-events: none; animation: heads-up-preview-out 260ms ease both;
+    pointer-events: none;
+    animation: heads-up-preview-out var(--heads-up-preview-animation-duration, 420ms) ease-in-out both;
   }
   @keyframes heads-up-preview-in {
-    from { transform: translateY(10px); opacity: 0; filter: blur(3px); }
+    from { transform: translateY(8px); opacity: 0; filter: blur(2px); }
   }
   @keyframes heads-up-preview-out {
-    to { transform: translateY(-12px); opacity: 0; filter: blur(4px); }
+    to { transform: translateY(-10px); opacity: 0; filter: blur(3px); }
   }
   @media (prefers-reduced-motion: reduce) {
     .preview-slide.entering, .preview-slide.leaving { animation: none; }
