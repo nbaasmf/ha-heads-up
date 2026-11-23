@@ -33,6 +33,7 @@ export const CONFIG_KEYS = [
   "show_acknowledged",
   "collapsed_items",
   "preview_popup",
+  "preview_rotation",
   "empty_message",
   "empty_icon",
 ];
@@ -441,6 +442,19 @@ export function normalizeConfig(config) {
   ) {
     throw new Error("preview_popup requires a title and a card configuration");
   }
+  const previewRotation = config.preview_rotation ?? null;
+  if (previewRotation !== null && (
+    typeof previewRotation !== "object" || Array.isArray(previewRotation) ||
+    !Number.isFinite(previewRotation.interval_seconds ?? 5) ||
+    (previewRotation.interval_seconds ?? 5) < 1 ||
+    (previewRotation.weather_entity != null &&
+      (typeof previewRotation.weather_entity !== "string" ||
+        !previewRotation.weather_entity.startsWith("weather."))) ||
+    !Number.isFinite(previewRotation.temperature_change ?? 8) ||
+    (previewRotation.temperature_change ?? 8) <= 0
+  )) {
+    throw new Error("preview_rotation requires valid interval, weather entity and temperature change settings");
+  }
   const emptyIcon = config.empty_icon ?? DEFAULT_EMPTY_ICON;
   if (typeof emptyIcon !== "string" || !/^[a-z0-9_-]+:[a-z0-9_-]+$/i.test(emptyIcon)) {
     throw new Error("empty_icon must look like mdi:bell-check-outline");
@@ -466,6 +480,14 @@ export function normalizeConfig(config) {
     show_acknowledged: config.show_acknowledged === undefined ? true : toBool(config.show_acknowledged),
     collapsed_items: collapsed,
     preview_popup: previewPopup,
+    preview_rotation: previewRotation === null ? null : {
+      interval_seconds: previewRotation.interval_seconds ?? 5,
+      live_tags: toList(previewRotation.live_tags ?? ["live", "timer"], "live_tags"),
+      live_ids: toList(previewRotation.live_ids, "live_ids"),
+      weather_entity: previewRotation.weather_entity ?? null,
+      show_current_weather: toBool(previewRotation.show_current_weather),
+      temperature_change: previewRotation.temperature_change ?? 8,
+    },
     empty_message: toText(config.empty_message, "empty_message"),
     empty_icon: emptyIcon,
   };
@@ -495,6 +517,72 @@ export function visibleBanners(banners, config) {
   );
   const sorted = sortBanners(shown, config.sort);
   return config.max_items === null ? sorted : sorted.slice(0, config.max_items);
+}
+
+export function previewItems(banners, { live_tags, live_ids }, weather) {
+  const items = banners.filter((banner, index) =>
+    index < 3 || Number.isFinite(banner.progress) ||
+    live_tags.includes(banner.tag) || live_ids.includes(banner.id)
+  );
+  if (weather) items.push(weather);
+  return items;
+}
+
+const WEATHER_PREVIEW_ID = Symbol("weather");
+const WEATHER_CONDITIONS = {
+  "lightning-rainy": ["thunder", "mdi:weather-lightning-rainy"],
+  lightning: ["thunder", "mdi:weather-lightning"],
+  hail: ["hail", "mdi:weather-hail"],
+  exceptional: ["severe", "mdi:weather-cloudy-alert"],
+  pouring: ["rain", "mdi:weather-pouring"],
+  snowy: ["snow", "mdi:weather-snowy"],
+  "snowy-rainy": ["snow", "mdi:weather-snowy-rainy"],
+  windy: ["wind", "mdi:weather-windy"],
+  "windy-variant": ["wind", "mdi:weather-windy-variant"],
+};
+const WEATHER_TEXT = {
+  de: { thunder: "Gewitter", hail: "Hagel", severe: "Auffälliges Wetter", rain: "Starkregen",
+    snow: "Schnee", wind: "Starker Wind", frost: "Frost", swing: "Temperaturwechsel", now: "Jetzt", weather: "Wetter" },
+  en: { thunder: "Thunderstorms", hail: "Hail", severe: "Unusual weather", rain: "Heavy rain",
+    snow: "Snow", wind: "Strong wind", frost: "Frost", swing: "Temperature change", now: "Now", weather: "Weather" },
+};
+
+export function previewWeather(state, forecast, config, language, now = Date.now(), conditionLabel) {
+  if (!state || ["unavailable", "unknown"].includes(state.state)) return null;
+  const text = WEATHER_TEXT[language?.split("-")[0]] ?? WEATHER_TEXT.en;
+  const attrs = state.attributes ?? {};
+  const fahrenheit = attrs.temperature_unit === "°F";
+  const unit = attrs.temperature_unit ?? "°C";
+  const format = (temperature) => `${new Intl.NumberFormat(language || undefined, {
+    maximumFractionDigits: 0,
+  }).format(temperature)} ${unit}`;
+  const current = attrs.temperature;
+  const end = now + 12 * 60 * 60 * 1000;
+  const upcoming = forecast.filter((item) => {
+    const time = Date.parse(item.datetime);
+    return time >= now && time <= end;
+  });
+  const forecastTemperatures = upcoming.flatMap((item) => [item.temperature, item.templow])
+    .filter(Number.isFinite);
+  const temperatures = Number.isFinite(current) ? [current, ...forecastTemperatures] : forecastTemperatures;
+  const lowest = Math.min(...temperatures);
+  const highest = Math.max(...temperatures);
+  const conditions = new Set([state.state, ...upcoming.map((item) => item.condition)]);
+  const condition = Object.keys(WEATHER_CONDITIONS).find((value) => conditions.has(value));
+  const summary = Number.isFinite(current) ? `${text.now} ${format(current)}` : "";
+  const tile = (key, icon, message = summary) => ({
+    id: WEATHER_PREVIEW_ID, title: text[key], icon, message,
+  });
+  if (condition) return tile(...WEATHER_CONDITIONS[condition]);
+  if (lowest <= (fahrenheit ? 32 : 0)) {
+    return tile("frost", "mdi:snowflake-thermometer", format(lowest));
+  }
+  if (highest - lowest >= config.temperature_change * (fahrenheit ? 1.8 : 1)) {
+    return tile("swing", "mdi:thermometer-lines", `${format(lowest)} → ${format(highest)}`);
+  }
+  return config.show_current_weather && summary
+    ? { ...tile("weather", "mdi:weather-partly-cloudy"), title: conditionLabel || text.weather }
+    : null;
 }
 
 // Snoozed banners of the viewer for the "Snoozed" list: same filters, soonest return first.
@@ -702,6 +790,23 @@ const STYLE = `
     color: var(--primary-text-color); font: inherit; text-align: start;
     border: 0; border-radius: var(--ha-card-border-radius, 22px); cursor: pointer;
   }
+  .preview-button { position: relative; overflow: clip; }
+  .preview-slide { width: 100%; min-width: 0; display: flex; align-items: center; gap: inherit; }
+  .preview-slide.entering { animation: heads-up-preview-in 260ms ease both; }
+  .preview-slide.leaving {
+    position: absolute; inset: 0; padding: inherit; box-sizing: border-box;
+    pointer-events: none; animation: heads-up-preview-out 260ms ease both;
+  }
+  @keyframes heads-up-preview-in {
+    from { transform: translateY(10px); opacity: 0; filter: blur(3px); }
+  }
+  @keyframes heads-up-preview-out {
+    to { transform: translateY(-12px); opacity: 0; filter: blur(4px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .preview-slide.entering, .preview-slide.leaving { animation: none; }
+    .preview-slide.leaving { display: none; }
+  }
   .preview-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
   .preview-button.critical {
     background: color-mix(in srgb, var(--accent) 23%, var(--heads-up-preview-surface, var(--secondary-background-color)));
@@ -865,6 +970,11 @@ class HeadsUpCard extends Base {
     this._focusAfter = null;
     this._timeNodes = [];
     this._timeTimer = null;
+    this._previewId = null;
+    this._firstPreviewId = null;
+    this._previewTimer = null;
+    this._weatherRequest = null;
+    this._forecast = [];
     this._unsub = null;
     this._subscribeKey = null;
     this._generation = 0;
@@ -879,12 +989,20 @@ class HeadsUpCard extends Base {
   setConfig(config) {
     this._config = normalizeConfig(config);
     this._expanded = false;
-    if (this._connected) this._subscribe();
+    this._previewId = null;
+    this._firstPreviewId = null;
+    if (this._connected) {
+      this._subscribe();
+      this._subscribeWeather();
+      this._startPreviewRotation();
+    }
     this._render();
   }
 
   set hass(hass) {
     const first = !this._hass;
+    const weatherEntity = this._config?.preview_rotation?.weather_entity;
+    const previousWeather = this._hass?.states?.[weatherEntity];
     this._hass = hass;
     if (hass?.language !== this._language) {
       this._language = hass?.language;
@@ -892,12 +1010,18 @@ class HeadsUpCard extends Base {
       if (this._config && !first) this._render();
     }
     if (first && this._connected) this._subscribe();
+    if (this._connected && weatherEntity) {
+      this._subscribeWeather();
+      if (previousWeather !== hass?.states?.[weatherEntity]) this._render();
+    }
   }
 
   connectedCallback() {
     this._connected = true;
     if (this._hass) this._subscribe();
     this._startTimeRefresh();
+    this._subscribeWeather();
+    this._startPreviewRotation();
   }
 
   disconnectedCallback() {
@@ -907,6 +1031,9 @@ class HeadsUpCard extends Base {
     this._unsubscribe();
     clearInterval(this._timeTimer);
     this._timeTimer = null;
+    clearInterval(this._previewTimer);
+    this._previewTimer = null;
+    this._unsubscribeWeather();
   }
 
   getCardSize() {
@@ -1375,10 +1502,63 @@ class HeadsUpCard extends Base {
     return header;
   }
 
-  _renderPreview() {
-    const popup = this._config.preview_popup;
+  _startPreviewRotation() {
+    clearInterval(this._previewTimer);
+    const rotation = this._config?.preview_rotation;
+    if (!this._config?.preview_popup || !rotation) return;
+    this._previewTimer = setInterval(() => {
+      const button = this.shadowRoot.querySelector(".preview-button");
+      if (!button || document.hidden || this.shadowRoot.activeElement === button ||
+        (matchMedia("(hover: hover)").matches && button.matches(":hover"))) return;
+      this._renderPreview(true);
+    }, rotation.interval_seconds * 1000);
+  }
+
+  _unsubscribeWeather() {
+    const request = this._weatherRequest;
+    this._weatherRequest = null;
+    this._forecast = [];
+    request?.unsubscribe?.then((fn) => fn()).catch(() => {});
+  }
+
+  _subscribeWeather() {
+    const entity = this._config?.preview_popup && this._config.preview_rotation?.weather_entity;
+    const state = entity && this._hass?.states?.[entity];
+    const connection = this._hass?.connection;
+    const features = state?.attributes?.supported_features ?? 0;
+    const type = features & 2 ? "hourly" : features & 4 ? "twice_daily" : features & 1 ? "daily" : null;
+    const previous = this._weatherRequest;
+    if (previous?.entity === entity && previous?.connection === connection && previous?.type === type) return;
+    this._unsubscribeWeather();
+    if (!type || !connection) return;
+    const request = { entity, connection, type };
+    this._weatherRequest = request;
+    request.unsubscribe = connection.subscribeMessage((event) => {
+      if (this._weatherRequest !== request) return;
+      this._forecast = Array.isArray(event.forecast) ? event.forecast : [];
+      this._render();
+    }, { type: "weather/subscribe_forecast", entity_id: entity, forecast_type: type });
+    // Forecasts can be disabled or temporarily unavailable for a provider.
+    request.unsubscribe.catch(() => {});
+  }
+
+  _renderPreview(advance = false) {
+    const { preview_popup: popup, preview_rotation: rotation } = this._config;
     const banners = this._shown();
-    const banner = banners[0];
+    const weatherState = this._hass?.states?.[rotation?.weather_entity];
+    const weather = rotation && weatherState && previewWeather(
+      weatherState, this._forecast, rotation, this._language,
+      Date.now(), this._hass?.formatEntityState?.(weatherState)
+    );
+    const items = rotation ? previewItems(banners, rotation, weather) : banners;
+    const first = items[0];
+    const urgent = first?.severity === "critical" && first.id !== this._firstPreviewId;
+    this._firstPreviewId = first?.id ?? null;
+    const current = rotation && !urgent ? items.findIndex((item) => item.id === this._previewId) : -1;
+    const index = advance && current >= 0 ? (current + 1) % items.length : Math.max(current, 0);
+    const banner = items[index];
+    const previousId = this._previewId;
+    this._previewId = banner?.id ?? null;
     const root = this.shadowRoot;
     let button = root.querySelector(".preview-button");
     if (!button) {
@@ -1433,7 +1613,7 @@ class HeadsUpCard extends Base {
       }
       iconArea.append(ring);
     }
-    const additional = banners.length - 1;
+    const additional = Math.max(0, banners.length - (banner && banner !== weather ? 1 : 0));
     if (additional > 0) iconArea.append(el("span", "preview-badge", additional > 9 ? "9+" : String(additional)));
 
     const title = banner?.title || banner?.message || this._config.empty_message || popup.title;
@@ -1441,10 +1621,22 @@ class HeadsUpCard extends Base {
     const text = el("span", "preview-text");
     text.append(el("span", "preview-title", title));
     if (status) text.append(el("span", "preview-status", status));
-    const label = [`${popup.title} (${banners.length})`, banner ? severityLabel(banner) : "", title, status];
+    const label = [`${popup.title} (${banners.length})`, banner?.severity ? severityLabel(banner) : "", title, status];
     if (Number.isInteger(banner?.progress)) label.push(`${banner.progress}%`);
     button.setAttribute("aria-label", label.filter(Boolean).join(" · "));
-    button.replaceChildren(iconArea, text);
+    const slide = el("span", "preview-slide");
+    slide.append(iconArea, text);
+    const previousSlide = button.lastElementChild;
+    if (advance && previousId !== this._previewId && previousSlide &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      previousSlide.className = "preview-slide leaving";
+      previousSlide.setAttribute("aria-hidden", "true");
+      slide.classList.add("entering");
+      previousSlide.addEventListener("animationend", () => previousSlide.remove(), { once: true });
+      button.replaceChildren(previousSlide, slide);
+    } else {
+      button.replaceChildren(slide);
+    }
   }
 
   _render() {

@@ -13,6 +13,8 @@ import {
   imageSource,
   needsSignature,
   normalizeConfig,
+  previewItems,
+  previewWeather,
   reservesActionSpace,
   relativeTime,
   resolveColors,
@@ -40,6 +42,65 @@ const banner = (over = {}) => ({
   tag: null,
   updated_at: "2026-10-25T10:00:00+00:00",
   ...over,
+});
+
+describe("preview rotation", () => {
+  const rotation = normalizeConfig({ preview_rotation: { live_ids: ["rule_timer"] } }).preview_rotation;
+
+  it("keeps the top three plus all progress and explicitly live items once", () => {
+    const banners = [
+      banner({ id: "urgent", severity: "critical", progress: 5 }),
+      banner({ id: "second" }),
+      banner({ id: "third" }),
+      banner({ id: "ordinary", expires_at: "2026-11-23T12:00:00Z" }),
+      banner({ id: "washer", progress: 0 }),
+      banner({ id: "kitchen", tag: "timer" }),
+      banner({ id: "rule_timer", tag: "rule" }),
+    ];
+    const weather = { id: Symbol("weather") };
+    expect(previewItems(banners, rotation, weather).map(({ id }) => id))
+      .toEqual(["urgent", "second", "third", "washer", "kitchen", "rule_timer", weather.id]);
+  });
+
+  it("can rotate even with no banners if there is relevant weather", () => {
+    const weather = { title: "Frost" };
+    expect(previewItems([], rotation, weather)).toEqual([weather]);
+  });
+
+  const now = Date.parse("2026-11-23T08:00:00Z");
+  const inHours = (hours, data) => ({ datetime: new Date(now + hours * 3600000).toISOString(), ...data });
+  const state = (temperature, state = "cloudy", unit = "°C") => ({
+    state, attributes: { temperature, temperature_unit: unit },
+  });
+
+  it("shows frost and compares temperatures in the entity's units", () => {
+    const low = previewWeather(state(45, "cloudy", "°F"), [inHours(6, { temperature: 30 })], rotation, "en", now);
+    expect(low).toMatchObject({ title: "Frost", message: "30 °F" });
+  });
+
+  it("shows a large temperature swing, but ignores past and out-of-range forecasts", () => {
+    const entries = [
+      inHours(-1, { condition: "hail" }),
+      inHours(4, { temperature: 14 }),
+      inHours(13, { condition: "snowy" }),
+    ];
+    expect(previewWeather(state(5), entries, rotation, "de", now)).toMatchObject({ title: "Temperaturwechsel" });
+    expect(previewWeather(state(8), entries, rotation, "de", now)).toBeNull();
+  });
+
+  it("shows significant conditions even if temperatures are missing", () => {
+    expect(previewWeather(state(undefined), [inHours(2, { condition: "snowy" })], rotation, "de", now))
+      .toMatchObject({ title: "Schnee", icon: "mdi:weather-snowy" });
+    expect(previewWeather(state(undefined, "lightning"), [], rotation, "de", now))
+      .toMatchObject({ title: "Gewitter" });
+  });
+
+  it("supports an optional slide for calm weather and skips unavailable weather", () => {
+    const always = { ...rotation, show_current_weather: true };
+    expect(previewWeather(state(10), [], always, "de", now, "Bewölkt"))
+      .toMatchObject({ title: "Bewölkt", message: "Jetzt 10 °C" });
+    expect(previewWeather(state(10, "unavailable"), [], always, "de", now)).toBeNull();
+  });
 });
 
 describe("normalizeConfig", () => {

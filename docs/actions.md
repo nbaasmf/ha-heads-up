@@ -737,6 +737,7 @@ The card shows a banner while it is active, not dismissed by you, and not remove
 | `sort` | `severity` or `time` | `severity` | `severity`: critical first, then warning, info, passive; newest first within a severity. `time`: newest first. |
 | `progress_style` | `bar` or `background` | `bar` | Draws a 3 px bar along the bottom of each banner or fills its background up to the current percentage. Uses the severity color. |
 | `preview_popup` | object | none | Show a single notification button with a count of the other banners and a progress ring when present. Its value is the UIX popover action data, including `title` and `card`. |
+| `preview_rotation` | object | none | Rotate the preview every `interval_seconds` (default 5). Shows the first three banners plus all banners with progress, a tag in `live_tags` (defaults to `live` and `timer`), or an ID in `live_ids`. Set `weather_entity` for significant conditions now or in the next 12 hours. `temperature_change` defaults to 8 °C and is converted for Fahrenheit. Enable `show_current_weather` to always include current weather. |
 | `layout` | `comfortable` or `compact` | `comfortable` | `compact` puts each banner on one line. |
 | `title` | text | none | A header above the banners. |
 | `show_time` | boolean | `false` | Show how long ago the banner was created or replaced ("just now", "50 min ago", "3 h ago", "1 day ago", "2 days ago"). |
