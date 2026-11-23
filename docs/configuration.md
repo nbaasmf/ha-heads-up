@@ -98,7 +98,7 @@ Popups need an open Home Assistant page; use push for a closed app. The popup is
 
 ### Speech
 
-The speak channel says a message on speakers: media players and Assist satellites. Use `heads_up.notify` with `channels: [speak]` or the `heads_up.speak` shortcut.
+The speak channel uses media players, Assist satellites, and Alexa Devices Speak and Announce entities. Use `heads_up.notify` with `channels: [speak]` or the `heads_up.speak` shortcut.
 
 ```yaml
 action: heads_up.speak
@@ -111,6 +111,8 @@ data:
 ```
 
 `recipients` are media players, Assist satellites, speaker groups and areas. A group is written as the entity ID of its sensor. An area is written by its area ID (`living_room`) and needs no group; it stands for the speakers assigned to it. A group or area written as its name fails with the ID to use. Speech has no audience: it goes to speakers, not to people.
+
+Choose an Alexa Devices `notify.*_speak` or `notify.*_announce` entity directly or add it as a group member. Heads Up uses `notify.send_message` so Alexa handles its own voice, language, and volume. Area expansion does not add Alexa notify entities: selecting both the device's Speak and Announce entities would otherwise speak twice.
 
 The text is `tts_message` if you set it, otherwise the title, otherwise the message. A text longer than 200 characters is cut after the last word that fits and ends with `…` (option Spoken text: longest).
 

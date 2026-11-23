@@ -207,6 +207,8 @@ notify:
           filter:
             - domain: media_player
             - domain: assist_satellite
+            - domain: notify
+              integration: alexa_devices
             - integration: heads_up
               domain: sensor
           multiple: true
@@ -356,9 +358,13 @@ speak:
       example: '["media_player.kitchen"]'
       selector:
         entity:
-          domain:
-          - media_player
-          - assist_satellite
+          filter:
+            - domain: media_player
+            - domain: assist_satellite
+            - domain: notify
+              integration: alexa_devices
+            - domain: sensor
+              integration: heads_up
           multiple: true
     id: *id007
     tag: *id008

@@ -9,11 +9,14 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.heads_up.const import DOMAIN
 from custom_components.heads_up.hub.channels import speak
 from custom_components.heads_up.hub.channels.speak import speech_text
+from custom_components.heads_up.hub.recipients import area_speakers, speaker_entities
 from custom_components.heads_up.models import Banner
 
 from .helpers import FakeSpeakers, settle, tick
@@ -54,6 +57,43 @@ async def test_a_satellite_is_announced_to(
     assert result["channels"]["speak"]["sent"] == 1
     (call,) = fake_speakers.announce
     assert call.data == {"entity_id": fake_speakers.satellite, "message": "Water leak"}
+
+
+async def test_alexa_announce_is_a_speaker_without_a_tts_engine(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    registry = er.async_get(hass)
+    alexa = registry.async_get_or_create("notify", "alexa_devices", "echo_announce").entity_id
+    mobile = registry.async_get_or_create("notify", "mobile_app", "phone").entity_id
+    hass.states.async_set(alexa, "unknown")
+    hass.states.async_set(mobile, "unknown")
+
+    calls = []
+
+    async def send_message(call: ServiceCall) -> None:
+        calls.append(dict(call.data))
+
+    hass.services.async_register("notify", "send_message", send_message)
+    assert speaker_entities(hass) == [alexa]
+    assert not hass.states.async_all("tts")
+
+    area = ar.async_get(hass).async_create("Kitchen")
+    registry.async_update_entity(alexa, area_id=area.id)
+    assert alexa not in area_speakers(hass, area.id)
+
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data={"members": [alexa], "areas": []},
+            subentry_type="recipient_group",
+            title="Echo",
+            unique_id=None,
+        ),
+    )
+    await hass.async_block_till_done()
+    result = await say(hass, entry, alexa, "sensor.heads_up_group_echo", volume=0.4)
+    assert result["channels"]["speak"]["sent"] == 1
+    assert calls == [{"message": "Water leak", "entity_id": alexa}]
 
 
 async def test_a_player_with_announce_is_spoken_to_through_tts_speak(

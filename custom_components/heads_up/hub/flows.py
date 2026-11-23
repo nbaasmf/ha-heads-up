@@ -81,7 +81,7 @@ from .policies.models import (
     parse_policy,
     policy_from_data,
 )
-from .recipients import SPEAKER_DOMAINS, area_exists, registrations
+from .recipients import ALEXA_DEVICES, SPEAKER_DOMAINS, area_exists, registrations, speaker_entities
 
 
 def _names_taken(flow: ConfigSubentryFlow, subentry_type: str, own: str | None) -> set[str]:
@@ -240,7 +240,13 @@ class RecipientGroupSubentryFlow(_HubFlow):
             {
                 vol.Required("name"): TextSelector(),
                 vol.Optional("members"): EntitySelector(
-                    EntitySelectorConfig(domain=list(SPEAKER_DOMAINS), multiple=True)
+                    EntitySelectorConfig(
+                        filter=[
+                            {"domain": list(SPEAKER_DOMAINS)},
+                            {"domain": "notify", "integration": ALEXA_DEVICES},
+                        ],
+                        multiple=True,
+                    )
                 ),
                 vol.Optional("areas"): AreaSelector(AreaSelectorConfig(multiple=True)),
             }
@@ -259,7 +265,7 @@ class RecipientGroupSubentryFlow(_HubFlow):
         areas = user_input.get("areas") or []
         if not members and not areas:
             errors["members"] = "group_empty"
-        elif any(self.hass.states.get(m) is None for m in members):
+        elif members and not set(members).issubset(speaker_entities(self.hass)):
             errors["members"] = "member_not_found"
         elif any(not area_exists(self.hass, a) for a in areas):
             errors["areas"] = "area_not_found"

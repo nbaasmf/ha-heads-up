@@ -29,6 +29,7 @@ from ..const import (
 
 MOBILE_APP = "mobile_app"
 SPEAKER_DOMAINS = ("media_player", "assist_satellite")
+ALEXA_DEVICES = "alexa_devices"
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,7 +231,16 @@ def find_area(hass: HomeAssistant, value: str) -> str | None:
 
 
 def speaker_entities(hass: HomeAssistant) -> list[str]:
-    return sorted(s.entity_id for d in SPEAKER_DOMAINS for s in hass.states.async_all(d))
+    """Playable entities, including explicitly selected Alexa Speak and Announce targets."""
+    entities = er.async_get(hass)
+    speakers = [s.entity_id for s in hass.states.async_all(SPEAKER_DOMAINS)]
+    speakers.extend(
+        state.entity_id
+        for state in hass.states.async_all("notify")
+        if (entry := entities.async_get(state.entity_id)) is not None
+        and entry.platform == ALEXA_DEVICES
+    )
+    return sorted(speakers)
 
 
 def unique(items: Iterable[str]) -> list[str]:

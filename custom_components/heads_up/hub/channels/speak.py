@@ -1,8 +1,9 @@
-"""Speak channel: media players and Assist satellites (DESIGN §23.9, D-091, D-114).
+"""Speak channel: media players, Assist satellites and Alexa Devices notify entities.
 
 Satellites get `assist_satellite.announce`. A media player whose state shows the announce feature
 gets `tts.speak`, which announces (it passes `announce: true` itself). Any other player gets
 `media_player.play_media` with the tts media source and no `announce`, at the volume it has.
+Alexa Speak and Announce entities get `notify.send_message`.
 
 Volume (D-208, D-215, D-217): the call's `volume`, else the volume of the severity, else the time
 band, else none. A `sonos` player with announce takes it as the clip volume (`extra.volume`,
@@ -178,7 +179,11 @@ class SpeakChannel:
         if not text:
             _LOGGER.debug("Speech on %s skipped: nothing to say", entity)
             return Outcome(Result.SKIPPED, "nothing_to_say")
-        volume = resolve_volume(message, self._manager.options, dt_util.now())
+        volume = (
+            None
+            if entity.startswith("notify.")
+            else resolve_volume(message, self._manager.options, dt_util.now())
+        )
         async with self._locks.setdefault(entity, asyncio.Lock()):
             key = (entity, text, volume)
             if self._repeated(key, message):
@@ -218,11 +223,16 @@ class SpeakChannel:
     async def _speak(
         self, entity: str, attributes: Any, text: str, volume: float | None = None
     ) -> Outcome:
-        language = str(self._opt(OPT_SPEAK_LANGUAGE) or self._hass.config.language)
-        if entity.split(".", 1)[0] == SATELLITE:
+        domain = entity.split(".", 1)[0]
+        if domain == "notify":
+            return await self._call(
+                entity, "notify", "send_message", {"message": text}, target={"entity_id": entity}
+            )
+        if domain == SATELLITE:
             return await self._call(
                 entity, SATELLITE, "announce", {"entity_id": entity, "message": text}
             )
+        language = str(self._opt(OPT_SPEAK_LANGUAGE) or self._hass.config.language)
         engine = self._tts_entity()
         if engine is None:
             engines = [s.entity_id for s in self._hass.states.async_all("tts")]
@@ -387,10 +397,20 @@ class SpeakChannel:
         self._pending[entity] = self._pending.get(entity, 0) + 1
         return True
 
-    async def _call(self, entity: str, domain: str, service: str, data: dict[str, Any]) -> Outcome:
+    async def _call(
+        self,
+        entity: str,
+        domain: str,
+        service: str,
+        data: dict[str, Any],
+        *,
+        target: dict[str, str] | None = None,
+    ) -> Outcome:
         _LOGGER.debug("Speaking on %s through %s.%s", entity, domain, service)
         try:
-            await self._hass.services.async_call(domain, service, data, blocking=True)
+            await self._hass.services.async_call(
+                domain, service, data, blocking=True, target=target
+            )
         except ServiceNotFound:
             self._warn(entity, "%s.%s does not exist", domain, service)
             return Outcome(Result.FAILED, "service_not_found")
