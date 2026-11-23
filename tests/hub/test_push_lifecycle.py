@@ -1,5 +1,6 @@
 """Push follows the message: replace, clear on every end, snooze and remind, failures, restart."""
 
+import re
 from typing import Any
 
 import pytest
@@ -10,6 +11,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.heads_up.const import DOMAIN
 from custom_components.heads_up.hub.ledger import State
+from custom_components.heads_up.models import Banner
 
 from ..test_restart import restart
 from .conftest import AddDevice
@@ -318,3 +320,60 @@ async def test_the_message_log_records_a_dismissal_snooze_and_its_end(
     await settle(hass, entry)
     results = [e["result"] for e in manager.hub.trace.entries("m")]
     assert {"snoozed", "unsnoozed", "dismissed"} <= set(results)
+
+
+@pytest.mark.parametrize("os_name", ["iOS", "Android"])
+async def test_progress_follows_one_message_on_the_card_and_phone(
+    hass: HomeAssistant, entry: MockConfigEntry, anna: FakeDevice, os_name: str
+) -> None:
+    hass.config_entries.async_update_entry(anna.entry, data={**anna.entry.data, "os_name": os_name})
+    message_id = "cycle_" + "x" * 58
+    for percent in (0, 45, 45, 100):
+        await notify(hass, entry, id=message_id, channels=["banner", "push"], progress=percent)
+        (card,) = entry.runtime_data.visible("anna-id")
+        assert card["progress"] == percent
+
+    updates = [call.data for call in anna.calls]
+    assert [call["data"]["progress"] for call in updates] == [0, 45, 100]
+    (tag,) = {call["data"]["tag"] for call in updates}
+    assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", tag)
+    assert all(
+        call["data"]["live_update"]
+        and call["data"]["progress_max"] == 100
+        and call["title"] == "Heads Up"
+        for call in updates
+    )
+
+    stored = entry.runtime_data.banners[message_id].to_dict()
+    assert Banner.from_dict(stored).progress == 100
+    del stored["progress"]
+    assert Banner.from_dict(stored).progress is None
+    await restart(hass, entry)
+    await hass.services.async_call(DOMAIN, "clear_notifications", {"id": message_id}, blocking=True)
+    await settle(hass, entry)
+    assert len(anna.calls) == 4
+    assert is_clear(anna.calls[-1]) and anna.calls[-1].data["data"]["tag"] == tag
+
+
+async def test_switch_between_live_activity_and_ordinary_push(
+    hass: HomeAssistant, entry: MockConfigEntry, anna: FakeDevice
+) -> None:
+    for fields in ({}, {"progress": 10}, {}):
+        await notify(hass, entry, **fields)
+    regular, clear_regular, live, clear_live, restored = anna.calls
+    assert "live_update" not in regular.data["data"]
+    assert is_clear(clear_regular)
+    assert clear_regular.data["data"]["tag"] == regular.data["data"]["tag"]
+    assert live.data["data"]["live_update"] is True
+    assert is_clear(clear_live) and clear_live.data["data"]["tag"] == live.data["data"]["tag"]
+    assert restored.data == regular.data
+
+
+@pytest.mark.parametrize("mode", ["generic", "title_only"])
+async def test_redacted_push_hides_progress(
+    hass: HomeAssistant, entry: MockConfigEntry, anna: FakeDevice, mode: str
+) -> None:
+    entry.runtime_data.options["push_lockscreen"] = mode
+    await notify(hass, entry, channels=["banner", "push"], progress=42)
+    assert entry.runtime_data.visible("anna-id")[0]["progress"] == 42
+    assert {"progress", "live_update", "progress_max"}.isdisjoint(anna.calls[0].data["data"])

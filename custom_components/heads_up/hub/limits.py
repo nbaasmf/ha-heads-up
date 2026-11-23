@@ -28,9 +28,10 @@ DUPLICATE = "duplicate"
 Signature = tuple[Any, ...]
 
 
-def signature(banner: Banner) -> Signature:
+def signature(banner: Banner, channel: str) -> Signature:
     actions = tuple((a.get("key"), a.get("label")) for a in banner.actions)
-    return (banner.title, banner.message, banner.severity, banner.icon, banner.image, actions)
+    content = (banner.title, banner.message, banner.severity, banner.icon, banner.image, actions)
+    return (*content, banner.progress) if channel == "push" else content
 
 
 class Limiter:
@@ -58,7 +59,7 @@ class Limiter:
         last = self._last.get((banner.id, channel, recipient))
         if last is None or not self.dedupe:
             return False
-        return last[1] == signature(banner) and dt_util.utcnow() - last[0] < self.dedupe
+        return last[1] == signature(banner, channel) and dt_util.utcnow() - last[0] < self.dedupe
 
     def push_allowed(self, banner: Banner, device: str) -> bool:
         """Count one push to a device. False when the device or the whole house is over its cap."""
@@ -75,7 +76,7 @@ class Limiter:
         return True
 
     def sent(self, banner: Banner, channel: str, recipient: str) -> None:
-        self._last[(banner.id, channel, recipient)] = (dt_util.utcnow(), signature(banner))
+        self._last[(banner.id, channel, recipient)] = (dt_util.utcnow(), signature(banner, channel))
 
     def forget(self, message_id: str) -> None:
         for key in [k for k in self._last if k[0] == message_id]:

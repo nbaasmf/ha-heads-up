@@ -485,6 +485,10 @@
         "image": {
           "name": "Imagen",
           "description": "Imagen mostrada bajo el mensaje en la tarjeta, en la ventana emergente y en el push. Una URL http:// o https:// o una ruta que empieza por /. Android e iOS la leen; las rutas del proxy de cámara solo funcionan en Android.\n\nEjemplo:\n```yaml\nimage: /media/local/door.jpg\n```"
+        },
+        "progress": {
+          "name": "Progreso",
+          "description": "Porcentaje entero de 0 a 100. Usa el mismo ID de mensaje para actualizarlo."
         }
       }
     },
@@ -643,6 +647,10 @@
         "mail_body": {
           "name": "Texto del correo",
           "description": "Texto del correo de este mensaje, en lugar de la plantilla de la página Canales. Las mismas variables que el asunto del correo. Solo con el canal mail. Deja la casilla sin marcar para usar la plantilla de la página Canales."
+        },
+        "progress": {
+          "name": "Progreso",
+          "description": "Porcentaje entero de 0 a 100. Usa el mismo ID de mensaje para actualizarlo."
         }
       }
     },
@@ -701,6 +709,10 @@
         "audience": {
           "name": "Audiencia",
           "description": "Elige un grupo: Everyone, Admins, At home o uno creado en la página Audiencias. Se calcula al enviar el mensaje, así que At home significa quien esté en casa entonces. Indica audiencia o destinatarios."
+        },
+        "progress": {
+          "name": "Progreso",
+          "description": "Porcentaje entero de 0 a 100. Usa el mismo ID de mensaje para actualizarlo."
         }
       }
     },

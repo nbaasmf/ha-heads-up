@@ -71,6 +71,7 @@ class Banner:
     # One message's own mail subject and body templates; empty: the Channels page templates.
     mail_subject: str | None = None
     mail_body: str | None = None
+    progress: int | None = None
 
     @property
     def on_card(self) -> bool:

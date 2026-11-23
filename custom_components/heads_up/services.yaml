@@ -23,6 +23,15 @@ create_banner:
     icon: &id005
       selector:
         icon: null
+    progress: &progress
+      example: 45
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: box
+          unit_of_measurement: "%"
     image: &id006
       example: /media/local/door.jpg
       selector:
@@ -224,6 +233,7 @@ notify:
           - critical
           translation_key: severity
     icon: *id005
+    progress: *progress
     image: *id006
     id: *id007
     tag: *id008
@@ -270,6 +280,7 @@ push:
           - critical
           translation_key: severity
     icon: *id005
+    progress: *progress
     image: *id006
     tts_message: *id016
     recipients:

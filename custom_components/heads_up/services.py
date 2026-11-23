@@ -203,6 +203,19 @@ def _image(value: str) -> str:
 
 IMAGE = vol.All(cv.string, vol.Length(min=1, max=MAX_IMAGE), _image)
 
+
+def _progress(value: object) -> int:
+    """Percentage from YAML, a rendered template or the action number selector."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not 0 <= value <= 100
+        or int(value) != value
+    ):
+        raise vol.Invalid("progress must be a whole percentage from 0 to 100")
+    return int(value)
+
+
 NAME = vol.All(cv.string, vol.Length(min=1, max=100))  # audience, recipient and policy names
 
 
@@ -362,6 +375,7 @@ _CREATE_FIELDS: dict[Any, Any] = {
     vol.Optional("actions"): ACTIONS_SCHEMA,
     vol.Optional("tap_action"): TAP_ACTION_SCHEMA,
     vol.Optional("image"): IMAGE,
+    vol.Optional("progress"): _progress,
 }
 
 
@@ -463,6 +477,8 @@ def _shortcut_schema(channel: str) -> VolSchemaType:
     if channel != "speak":  # speech takes speakers, not an audience (D-098)
         fields[vol.Optional("audience")] = NAME
         fields[vol.Optional("image")] = IMAGE
+    if channel == "push":
+        fields[vol.Optional("progress")] = _progress
     needs = ("recipients",) if channel == "speak" else ("audience", "recipients")
     return vol.All(vol.Schema(fields), cv.has_at_least_one_key(*needs), _exclusive_target)
 
@@ -832,6 +848,7 @@ def _shortcut(channel: str) -> Callable[[ServiceCall], Coroutine[Any, Any, Servi
             tag=data.get("tag"),
             tap_action=data.get("tap_action"),
             image=data.get("image"),
+            progress=data.get("progress"),
             actions=[dict(a) for a in data.get("actions", [])],
             tts_message=data.get("tts_message"),
             volume=data.get("volume"),

@@ -485,6 +485,10 @@
         "image": {
           "name": "Image",
           "description": "Picture shown under the message on the card, in the popup and on the push. A URL starting with http:// or https://, or a path starting with /. Android and iOS both read it; camera proxy paths work on Android only.\n\nExample:\n```yaml\nimage: /media/local/door.jpg\n```"
+        },
+        "progress": {
+          "name": "Progress",
+          "description": "Whole percentage from 0 to 100. Reuse the message ID to update it."
         }
       }
     },
@@ -643,6 +647,10 @@
         "mail_body": {
           "name": "Mail text",
           "description": "Text of this message's mail, instead of the template on the Channels page. Same placeholders as Mail subject. Only used with the mail channel. Leave the checkbox unchecked to use the template from the Channels page."
+        },
+        "progress": {
+          "name": "Progress",
+          "description": "Whole percentage from 0 to 100. Reuse the message ID to update it."
         }
       }
     },
@@ -701,6 +709,10 @@
         "audience": {
           "name": "Audience",
           "description": "Pick a group: Everyone, Admins, At home, or one you made on the Audiences page. It is worked out when the message is sent, so At home means whoever is home then. Give either audience or recipients."
+        },
+        "progress": {
+          "name": "Progress",
+          "description": "Whole percentage from 0 to 100. Reuse the message ID to update it."
         }
       }
     },

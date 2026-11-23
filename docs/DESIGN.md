@@ -539,6 +539,7 @@ How both sources stay equal:
 | tap action | yes | yes (Tap action field, YAML) |
 | condition on an entity (operators, `for`) | yes | yes |
 | template condition | yes | yes (Template field; replaces the entity) |
+| `progress` (fork decision F-001) | yes | exception: an automation publishes successive readings under one message ID. Watch rules expose a boolean condition and do not sample a numeric progress value. |
 | `id`, `tag`, `timeout`, `mode` | yes | exception: a rule's lifetime is its condition; its tag is `rule`; its mode is recurring (D-052, D-056) |
 | clear by action or by an admin | yes | exception: the rule is disabled or deleted instead (D-056) |
 | stored over a restart (banner, dismissals, snoozes) | yes | exception: a rule is rebuilt from its subentry; dismissals and snoozes are not kept (D-056, D-069) |

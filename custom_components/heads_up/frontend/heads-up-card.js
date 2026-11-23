@@ -19,6 +19,7 @@ export const CONFIG_KEYS = [
   "max_items",
   "sort",
   "layout",
+  "progress_style",
   "show_all",
   "show_empty",
   "title",
@@ -31,6 +32,7 @@ export const CONFIG_KEYS = [
   "show_snoozed",
   "show_acknowledged",
   "collapsed_items",
+  "preview_popup",
   "empty_message",
   "empty_icon",
 ];
@@ -38,12 +40,14 @@ export const CONFIG_KEYS = [
 const EDITOR_DEFAULTS = {
   sort: "severity",
   layout: "comfortable",
+  progress_style: "bar",
   colorize: "all",
   empty_icon: "mdi:bell-check-outline",
   show_acknowledged: true,
 };
 const SORTS = ["severity", "time"];
 const LAYOUTS = ["comfortable", "compact"];
+const PROGRESS_STYLES = ["bar", "background"];
 const COLORIZE = ["all", "background", "icon", "bar"];
 const DEFAULT_EMPTY_ICON = "mdi:bell-check-outline";
 const TIME_REFRESH_MS = 30000;
@@ -92,6 +96,9 @@ export const STRINGS = {
     max_items: "Maximum number of banners",
     sort: "Sort",
     layout: "Layout",
+    progress_style: "Progress display",
+    progress_bar: "Bottom bar",
+    progress_background: "Background fill",
     show_all: "Show banners for all users (admins only)",
     show_empty: "Show the card when there are no banners",
     title: "Card title",
@@ -165,6 +172,9 @@ export const TRANSLATIONS = {
       "max_items": "Maximale Anzahl Banner",
       "sort": "Sortierung",
       "layout": "Layout",
+      "progress_style": "Fortschrittsanzeige",
+      "progress_bar": "Balken am unteren Rand",
+      "progress_background": "Hintergrundfüllung",
       "show_all": "Banner aller Benutzer zeigen (nur Admins)",
       "show_empty": "Karte zeigen, wenn es keine Banner gibt",
       "title": "Kartentitel",
@@ -235,6 +245,9 @@ export const TRANSLATIONS = {
       "max_items": "Nombre maximal de bannières",
       "sort": "Tri",
       "layout": "Disposition",
+      "progress_style": "Affichage de la progression",
+      "progress_bar": "Barre en bas",
+      "progress_background": "Remplissage du fond",
       "show_all": "Afficher les bannières de tous les utilisateurs (administrateurs uniquement)",
       "show_empty": "Afficher la carte quand il n'y a aucune bannière",
       "title": "Titre de la carte",
@@ -305,6 +318,9 @@ export const TRANSLATIONS = {
       "max_items": "Número máximo de avisos",
       "sort": "Orden",
       "layout": "Diseño",
+      "progress_style": "Indicador de progreso",
+      "progress_bar": "Barra inferior",
+      "progress_background": "Relleno de fondo",
       "show_all": "Mostrar avisos de todos los usuarios (solo administradores)",
       "show_empty": "Mostrar la tarjeta cuando no hay avisos",
       "title": "Título de la tarjeta",
@@ -402,6 +418,10 @@ export function normalizeConfig(config) {
   if (!SORTS.includes(sort)) throw new Error(`sort must be one of ${SORTS.join(", ")}`);
   const layout = config.layout ?? "comfortable";
   if (!LAYOUTS.includes(layout)) throw new Error(`layout must be one of ${LAYOUTS.join(", ")}`);
+  const progressStyle = config.progress_style ?? "bar";
+  if (!PROGRESS_STYLES.includes(progressStyle)) {
+    throw new Error("progress_style must be bar or background");
+  }
   const colorize = config.colorize ?? "all";
   if (!COLORIZE.includes(colorize)) {
     throw new Error(`colorize must be one of ${COLORIZE.join(", ")}`);
@@ -414,6 +434,13 @@ export function normalizeConfig(config) {
   if (collapsed !== null && (!Number.isInteger(collapsed) || collapsed < 1)) {
     throw new Error("collapsed_items must be an integer of 1 or more");
   }
+  const previewPopup = config.preview_popup ?? null;
+  if (
+    previewPopup !== null &&
+    (typeof previewPopup.title !== "string" || !previewPopup.card?.type)
+  ) {
+    throw new Error("preview_popup requires a title and a card configuration");
+  }
   const emptyIcon = config.empty_icon ?? DEFAULT_EMPTY_ICON;
   if (typeof emptyIcon !== "string" || !/^[a-z0-9_-]+:[a-z0-9_-]+$/i.test(emptyIcon)) {
     throw new Error("empty_icon must look like mdi:bell-check-outline");
@@ -425,6 +452,7 @@ export function normalizeConfig(config) {
     max_items: maxItems,
     sort,
     layout,
+    progress_style: progressStyle,
     show_all: toBool(config.show_all),
     show_empty: toBool(config.show_empty),
     title: toText(config.title, "title"),
@@ -437,6 +465,7 @@ export function normalizeConfig(config) {
     show_snoozed: config.show_snoozed === undefined ? true : toBool(config.show_snoozed),
     show_acknowledged: config.show_acknowledged === undefined ? true : toBool(config.show_acknowledged),
     collapsed_items: collapsed,
+    preview_popup: previewPopup,
     empty_message: toText(config.empty_message, "empty_message"),
     empty_icon: emptyIcon,
   };
@@ -666,6 +695,41 @@ export function reservesActionSpace(banners, isAdmin) {
 const STYLE = `
   :host { display: block; }
   ha-card { overflow: hidden; }
+  .preview-button {
+    box-sizing: border-box; display: flex; align-items: center; gap: var(--ha-space-3, 12px);
+    width: 100%; min-height: 64px; padding: 8px 10px;
+    background: var(--heads-up-preview-surface, var(--secondary-background-color));
+    color: var(--primary-text-color); font: inherit; text-align: start;
+    border: 0; border-radius: var(--ha-card-border-radius, 22px); cursor: pointer;
+  }
+  .preview-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+  .preview-button.critical {
+    background: color-mix(in srgb, var(--accent) 23%, var(--heads-up-preview-surface, var(--secondary-background-color)));
+  }
+  .preview-icon {
+    position: relative; flex: 0 0 44px; height: 44px; display: grid; place-items: center;
+    color: var(--accent, var(--secondary-text-color)); isolation: isolate;
+  }
+  .preview-icon ha-icon {
+    display: grid; place-items: center; width: 36px; height: 36px;
+    border-radius: var(--radius-inner, 13px);
+    background: var(--heads-up-preview-icon-surface, var(--secondary-background-color));
+    --mdc-icon-size: 21px;
+  }
+  .preview-ring { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
+  .preview-ring circle { fill: none; stroke: currentColor; stroke-width: 2; }
+  .preview-ring .track { opacity: .24; }
+  .preview-badge {
+    position: absolute; inset-block-start: -4px; inset-inline-end: -4px;
+    min-width: 20px; box-sizing: border-box; padding: 0 3px; border-radius: 999px;
+    text-align: center; line-height: 20px; font-size: 11px; font-weight: 700;
+    color: var(--heads-up-preview-badge-text, var(--card-background-color));
+    background: var(--heads-up-preview-badge-surface, var(--primary-text-color));
+  }
+  .preview-text { min-width: 0; display: grid; gap: 2px; }
+  .preview-title, .preview-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .preview-title { font-weight: var(--ha-font-weight-bold, 700); }
+  .preview-status { color: var(--secondary-text-color); font-size: var(--ha-font-size-s, 12px); }
   .header {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 8px 8px 0 16px; min-height: 40px;
@@ -674,18 +738,33 @@ const STYLE = `
   .list { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
   .region { display: flex; flex-direction: column; gap: 8px; }
   .banner {
-    position: relative; display: flex; align-items: flex-start; gap: 12px;
-    padding: 12px 8px 12px 12px; border-radius: 8px;
+    position: relative; isolation: isolate; display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 8px 12px 12px; border-radius: var(--heads-up-banner-radius, 8px);
     border-inline-start: 4px solid transparent;
     background: var(--secondary-background-color);
     color: var(--primary-text-color);
+  }
+  .progress {
+    position: absolute; z-index: -1; pointer-events: none; inset: auto 0 0; height: 3px;
+    background: linear-gradient(to right, var(--accent) var(--percent), transparent var(--percent)),
+      color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .progress.background {
+    inset: 0; height: auto; border-radius: inherit;
+    background: linear-gradient(to right, color-mix(in srgb, var(--accent) 25%, transparent)
+      var(--percent), transparent var(--percent));
   }
   .banner.c-bg { background: color-mix(in srgb, var(--accent) 15%, var(--card-background-color)); }
   .banner.c-bar { border-inline-start-color: var(--accent); }
   .banner.swipe { touch-action: pan-y; user-select: none; }
   .banner.tap { cursor: pointer; }
   .banner.tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .banner ha-icon { flex: none; margin-top: 2px; color: var(--primary-text-color); }
+  .banner ha-icon {
+    flex: none; margin-top: 2px; color: var(--primary-text-color);
+    padding: var(--heads-up-banner-icon-padding, 0);
+    border-radius: var(--heads-up-banner-radius, 8px);
+    background: var(--heads-up-banner-icon-surface, transparent);
+  }
   .banner.c-icon ha-icon { color: var(--accent); }
   .text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 0.75em; }
@@ -1119,6 +1198,14 @@ class HeadsUpCard extends Base {
     const node = el("div", classes.join(" "));
     const color = severityColor(banner, cfg.colors);
     node.style.setProperty("--accent", color);
+    if (Number.isInteger(banner.progress) && banner.progress >= 0 && banner.progress <= 100) {
+      const meter = el("div", `progress ${cfg.progress_style}`);
+      meter.style.setProperty("--percent", `${banner.progress}%`);
+      meter.setAttribute("role", "progressbar");
+      meter.setAttribute("aria-label", banner.title || banner.message);
+      meter.setAttribute("aria-valuenow", String(banner.progress));
+      node.append(meter);
+    }
     if (cfg.layout === "compact") {
       node.title = banner.title ? `${banner.title}: ${banner.message}` : banner.message;
     }
@@ -1288,7 +1375,83 @@ class HeadsUpCard extends Base {
     return header;
   }
 
+  _renderPreview() {
+    const popup = this._config.preview_popup;
+    const banners = this._shown();
+    const banner = banners[0];
+    const root = this.shadowRoot;
+    let button = root.querySelector(".preview-button");
+    if (!button) {
+      const style = el("style");
+      style.textContent = STYLE;
+      button = el("button", "preview-button");
+      button.type = "button";
+      button.setAttribute("aria-haspopup", "dialog");
+      button.addEventListener("click", () => {
+        const data = this._config.preview_popup;
+        const count = this._shown().length;
+        const { severity, tag, show_all } = this._config;
+        const card = { severity, tag, show_all, ...data.card };
+        button.dispatchEvent(new CustomEvent("ll-custom", {
+          bubbles: true,
+          composed: true,
+          detail: {
+            uix: { action: "popover", data: { ...data, card, title: `${data.title} (${count})` } },
+          },
+        }));
+      });
+      root.replaceChildren(style, button);
+    }
+
+    this.style.display = "";
+    button.classList.toggle("critical", banner?.severity === "critical");
+    if (banner) button.style.setProperty("--accent", severityColor(banner, this._config.colors));
+    else button.style.removeProperty("--accent");
+
+    const icon = el("ha-icon");
+    icon.setAttribute("icon", banner?.icon ?? this._config.empty_icon);
+    const iconArea = el("span", "preview-icon");
+    iconArea.setAttribute("aria-hidden", "true");
+    iconArea.append(icon);
+    if (Number.isInteger(banner?.progress) && banner.progress >= 0 && banner.progress <= 100) {
+      const ns = "http://www.w3.org/2000/svg";
+      const ring = document.createElementNS(ns, "svg");
+      ring.setAttribute("class", "preview-ring");
+      ring.setAttribute("viewBox", "0 0 44 44");
+      for (const kind of ["track", "value"]) {
+        const circle = document.createElementNS(ns, "circle");
+        circle.setAttribute("class", kind);
+        circle.setAttribute("cx", "22");
+        circle.setAttribute("cy", "22");
+        circle.setAttribute("r", "20");
+        if (kind === "value") {
+          circle.setAttribute("pathLength", "100");
+          circle.setAttribute("stroke-dasharray", `${banner.progress} 100`);
+          circle.setAttribute("transform", "rotate(-90 22 22)");
+        }
+        ring.append(circle);
+      }
+      iconArea.append(ring);
+    }
+    const additional = banners.length - 1;
+    if (additional > 0) iconArea.append(el("span", "preview-badge", additional > 9 ? "9+" : String(additional)));
+
+    const title = banner?.title || banner?.message || this._config.empty_message || popup.title;
+    const status = banner?.title ? banner.message : "";
+    const text = el("span", "preview-text");
+    text.append(el("span", "preview-title", title));
+    if (status) text.append(el("span", "preview-status", status));
+    const label = [`${popup.title} (${banners.length})`, banner ? severityLabel(banner) : "", title, status];
+    if (Number.isInteger(banner?.progress)) label.push(`${banner.progress}%`);
+    button.setAttribute("aria-label", label.filter(Boolean).join(" · "));
+    button.replaceChildren(iconArea, text);
+  }
+
   _render() {
+    if (this._config?.preview_popup && !this._error) {
+      this._renderPreview();
+      return;
+    }
     const root = this.shadowRoot;
     root.replaceChildren();
     this._timeNodes = [];
@@ -1431,6 +1594,7 @@ class HeadsUpCardEditor extends Base {
       ]),
       { name: "show_time", selector: { boolean: {} } },
       { name: "show_severity", selector: { boolean: {} } },
+      select("progress_style", PROGRESS_STYLES.map((v) => ({ value: v, label: t[`progress_${v}`] }))),
       select("colorize", COLORIZE.map((v) => ({ value: v, label: t[`colorize_${v}`] }))),
       // Colors are set for every card on the Severities page of the panel (D-222). A card that
       // already has `colors` in its YAML keeps them; the editor no longer offers the field.
@@ -1513,7 +1677,7 @@ function registerElements() {
       type: "heads-up-card",
       name: "Heads Up",
       description: "Banners created by the Heads Up integration.",
-      documentationURL: "https://github.com/Seyphaton/ha-heads-up",
+      documentationURL: "https://github.com/nbaasmf/ha-heads-up",
     });
   }
 }
